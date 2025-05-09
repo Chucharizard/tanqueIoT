@@ -156,6 +156,7 @@
             cursor: pointer;
             transition: all 0.3s ease;
             border: 1px solid rgba(255, 255, 255, 0.1);
+            user-select: none;
         }
         
         .control-btn:hover {
@@ -208,61 +209,32 @@
             font-size: 18px;
             opacity: 0.7;
         }
+        
+        .connection-status {
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            padding: 8px 15px;
+            border-radius: 20px;
+            font-size: 14px;
+            font-weight: bold;
+            transition: all 0.3s ease;
+        }
+        
+        .connected {
+            background-color: rgba(46, 204, 113, 0.7);
+        }
+        
+        .disconnected {
+            background-color: rgba(231, 76, 60, 0.7);
+        }
     </style>
 </head>
 <body>
+    <div id="connection-status" class="connection-status disconnected">Desconectado</div>
+    
     <div class="container">
         <h1>Robot Sensor Dashboard</h1>
-        
-        <div class="glass-panel">
-            <h2>Estado Actual de Sensores</h2>
-            <div class="sensor-grid">
-                {% for device_id, data in readings.items() %}
-                <!-- Sensor de gas -->
-                <div class="sensor-card">
-                    <div class="sensor-icon">🔥</div>
-                    <div class="sensor-label">Nivel de Gas</div>
-                    <div class="sensor-value">{{ data.gas }}</div>
-                    <div class="gauge gauge-gas">
-                        <div class="gauge-fill" style="width: {{ data.gas / 10 }}%"></div>
-                    </div>
-                    {% if data.gas_alert %}
-                    <span class="alert">¡ALERTA DE GAS!</span>
-                    {% endif %}
-                </div>
-                
-                <!-- Sensor de temperatura -->
-                <div class="sensor-card">
-                    <div class="sensor-icon">🌡️</div>
-                    <div class="sensor-label">Temperatura</div>
-                    <div class="sensor-value">{{ data.temperature }} °C</div>
-                    <div class="gauge gauge-temp">
-                        <div class="gauge-fill" style="width: {{ (data.temperature / 50) * 100 }}%"></div>
-                    </div>
-                </div>
-                
-                <!-- Sensor de humedad -->
-                <div class="sensor-card">
-                    <div class="sensor-icon">💧</div>
-                    <div class="sensor-label">Humedad</div>
-                    <div class="sensor-value">{{ data.humidity }} %</div>
-                    <div class="gauge gauge-humidity">
-                        <div class="gauge-fill" style="width: {{ data.humidity }}%"></div>
-                    </div>
-                </div>
-                
-                <!-- Última actualización -->
-                <div class="sensor-card wide">
-                    <div class="sensor-label">Última actualización</div>
-                    <div class="sensor-value time">{{ data.timestamp.strftime('%d/%m/%Y %H:%M:%S') }}</div>
-                </div>
-                {% else %}
-                <div class="no-data">
-                    No hay datos disponibles. Esperando conexión del dispositivo...
-                </div>
-                {% endfor %}
-            </div>
-        </div>
         
         <!-- Panel de control -->
         <div class="glass-panel">
@@ -273,6 +245,60 @@
                 <button id="stop-btn" class="control-btn">⏹️ Detener</button>
                 <button id="right-btn" class="control-btn">➡️ Derecha</button>
                 <button id="backward-btn" class="control-btn">⬇️ Atrás</button>
+            </div>
+        </div>
+        
+        <div class="glass-panel">
+            <h2>Estado Actual de Sensores</h2>
+            <div class="sensor-grid">
+                {% if readings %}
+                <!-- Sensor de gas -->
+                <div class="sensor-card">
+                    <div class="sensor-icon">🔥</div>
+                    <div class="sensor-label">Nivel de Gas</div>
+                    <div class="sensor-value"><span id="gasValue">{{ readings.gas }}</span></div>
+                    <div class="gauge gauge-gas">
+                        <div id="gasGauge" class="gauge-fill" style="width: {{ readings.gas / 10 }}%"></div>
+                    </div>
+                    <span id="gasAlert" class="alert" style="display: {% if readings.gas_alert %}block{% else %}none{% endif %}">¡ALERTA DE GAS!</span>
+                </div>
+                
+                <!-- Sensor de temperatura -->
+                <div class="sensor-card">
+                    <div class="sensor-icon">🌡️</div>
+                    <div class="sensor-label">Temperatura</div>
+                    <div class="sensor-value"><span id="tempValue">{{ readings.temperature }}</span> °C</div>
+                    <div class="gauge gauge-temp">
+                        <div id="tempGauge" class="gauge-fill" style="width: {{ (readings.temperature / 50) * 100 }}%"></div>
+                    </div>
+                </div>
+                
+                <!-- Sensor de humedad -->
+                <div class="sensor-card">
+                    <div class="sensor-icon">💧</div>
+                    <div class="sensor-label">Humedad</div>
+                    <div class="sensor-value"><span id="humidityValue">{{ readings.humidity }}</span> %</div>
+                    <div class="gauge gauge-humidity">
+                        <div id="humidityGauge" class="gauge-fill" style="width: {{ readings.humidity }}%"></div>
+                    </div>
+                </div>
+                
+                <!-- Última actualización -->
+                <div class="sensor-card wide">
+                    <div class="sensor-label">Última actualización</div>
+                    <div class="sensor-value time" id="lastUpdate">
+                        {% if readings.timestamp %}
+                            {{ readings.timestamp }}
+                        {% else %}
+                            Esperando datos...
+                        {% endif %}
+                    </div>
+                </div>
+                {% else %}
+                <div class="no-data">
+                    No hay datos disponibles. Esperando conexión del dispositivo...
+                </div>
+                {% endif %}
             </div>
         </div>
         
@@ -292,39 +318,155 @@
         const tempData = {{ temp_data|tojson }};
         const humidityData = {{ humidity_data|tojson }};
         
-        // Función para enviar comandos al tanque
-        function sendCommand(action) {
-            fetch('/api/command', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ action: action }),
-            })
-            .then(response => response.json())
-            .then(data => console.log('Comando enviado:', data))
-            .catch(error => console.error('Error al enviar comando:', error));
+        // WebSocket para comunicación en tiempo real
+        const socket = new WebSocket(`${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.host}/ws/dashboard`);
+        let isConnected = false;
+        const connectionStatus = document.getElementById('connection-status');
+        
+        // Conectar WebSocket
+        socket.onopen = function(e) {
+            console.log("Conexión WebSocket establecida");
+            isConnected = true;
+            connectionStatus.textContent = 'Conectado';
+            connectionStatus.className = 'connection-status connected';
+        };
+        
+        // Recibir datos
+        socket.onmessage = function(event) {
+            const data = JSON.parse(event.data);
+            
+            // Actualizar solo si recibimos datos de sensores
+            if (data.gas !== undefined) {
+                // Actualizar valores mostrados
+                document.getElementById("gasValue").textContent = data.gas;
+                document.getElementById("tempValue").textContent = data.temperature;
+                document.getElementById("humidityValue").textContent = data.humidity;
+                
+                // Actualizar medidores
+                updateGauges(data.gas, data.temperature, data.humidity);
+                
+                // Mostrar/ocultar alerta
+                if (data.gas_alert) {
+                    document.getElementById("gasAlert").style.display = "block";
+                } else {
+                    document.getElementById("gasAlert").style.display = "none";
+                }
+                
+                // Actualizar timestamp
+                const timestamp = new Date(data.timestamp);
+                document.getElementById("lastUpdate").textContent = 
+                    timestamp.toLocaleDateString() + " " + timestamp.toLocaleTimeString();
+            }
+        };
+        
+        // Manejar desconexión
+        socket.onclose = function(event) {
+            console.log("Conexión WebSocket cerrada");
+            isConnected = false;
+            connectionStatus.textContent = 'Desconectado';
+            connectionStatus.className = 'connection-status disconnected';
+            // Intentar reconectar después de un tiempo
+            setTimeout(() => {
+                window.location.reload();
+            }, 5000);
+        };
+        
+        // Actualizar las barras de medición
+        function updateGauges(gas, temp, humidity) {
+            // Gas (asumiendo rango de 0-1000, ajustar según tu sensor)
+            const gasPercent = Math.min(gas / 10, 100);
+            document.getElementById("gasGauge").style.width = gasPercent + "%";
+            
+            // Temperatura (rango de 0-50°C común para interiores)
+            const tempPercent = Math.min((temp / 50) * 100, 100);
+            document.getElementById("tempGauge").style.width = tempPercent + "%";
+            
+            // Humedad (rango de 0-100%)
+            document.getElementById("humidityGauge").style.width = humidity + "%";
         }
         
-        // Configurar eventos para botones de control
-        document.getElementById('forward-btn').addEventListener('click', () => sendCommand('forward'));
-        document.getElementById('left-btn').addEventListener('click', () => sendCommand('left'));
-        document.getElementById('stop-btn').addEventListener('click', () => sendCommand('stop'));
-        document.getElementById('right-btn').addEventListener('click', () => sendCommand('right'));
-        document.getElementById('backward-btn').addEventListener('click', () => sendCommand('backward'));
+        // Control del tanque - variables
+        let controlInterval;
+        let activeDirection = null;
         
-        // Detener auto al soltar botones (opcional)
-        document.querySelectorAll('.control-btn').forEach(btn => {
-            if (btn.id !== 'stop-btn') {
-                btn.addEventListener('mouseup', () => sendCommand('stop'));
-                btn.addEventListener('touchend', () => sendCommand('stop'));
+        // Función para enviar comandos
+        function sendCommand(action) {
+            if (isConnected) {
+                socket.send(JSON.stringify({ action }));
+                console.log("Comando enviado:", action);
+            } else {
+                console.log("No se puede enviar comando: WebSocket desconectado");
             }
+        }
+        
+        // Iniciar movimiento continuo cuando se presiona un botón
+        function startContinuousControl(action) {
+            if (activeDirection !== action) {
+                stopContinuousControl();
+                activeDirection = action;
+                sendCommand(action);
+                // Envía el comando repetidamente mientras se mantiene presionado
+                controlInterval = setInterval(() => {
+                    sendCommand(action);
+                }, 100); // 10 veces por segundo
+            }
+        }
+        
+        // Detener movimiento cuando se suelta el botón
+        function stopContinuousControl() {
+            if (controlInterval) {
+                clearInterval(controlInterval);
+                controlInterval = null;
+            }
+            if (activeDirection) {
+                sendCommand('stop');
+                activeDirection = null;
+            }
+        }
+        
+        // Configurar controles de botones - Mouse
+        document.getElementById('forward-btn').addEventListener('mousedown', () => startContinuousControl('forward'));
+        document.getElementById('left-btn').addEventListener('mousedown', () => startContinuousControl('left'));
+        document.getElementById('right-btn').addEventListener('mousedown', () => startContinuousControl('right'));
+        document.getElementById('backward-btn').addEventListener('mousedown', () => startContinuousControl('backward'));
+        document.getElementById('stop-btn').addEventListener('mousedown', () => sendCommand('stop'));
+        
+        document.getElementById('forward-btn').addEventListener('mouseup', stopContinuousControl);
+        document.getElementById('left-btn').addEventListener('mouseup', stopContinuousControl);
+        document.getElementById('right-btn').addEventListener('mouseup', stopContinuousControl);
+        document.getElementById('backward-btn').addEventListener('mouseup', stopContinuousControl);
+        
+        document.getElementById('forward-btn').addEventListener('mouseleave', stopContinuousControl);
+        document.getElementById('left-btn').addEventListener('mouseleave', stopContinuousControl);
+        document.getElementById('right-btn').addEventListener('mouseleave', stopContinuousControl);
+        document.getElementById('backward-btn').addEventListener('mouseleave', stopContinuousControl);
+        
+        // Configurar controles de botones - Táctil
+        document.getElementById('forward-btn').addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            startContinuousControl('forward');
+        });
+        document.getElementById('left-btn').addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            startContinuousControl('left');
+        });
+        document.getElementById('right-btn').addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            startContinuousControl('right');
+        });
+        document.getElementById('backward-btn').addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            startContinuousControl('backward');
+        });
+        document.getElementById('stop-btn').addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            sendCommand('stop');
         });
         
-        // Actualizar la página cada 30 segundos
-        setInterval(() => {
-            window.location.reload();
-        }, 30000);
+        document.getElementById('forward-btn').addEventListener('touchend', stopContinuousControl);
+        document.getElementById('left-btn').addEventListener('touchend', stopContinuousControl);
+        document.getElementById('right-btn').addEventListener('touchend', stopContinuousControl);
+        document.getElementById('backward-btn').addEventListener('touchend', stopContinuousControl);
         
         // Crear gráfico de sensores
         function createChart() {
@@ -452,6 +594,36 @@
         
         // Crear gráfico al cargar la página
         createChart();
+        
+        // Manejar teclas para controlar el tanque desde teclado
+        document.addEventListener('keydown', function(event) {
+            // Solo procesar si no hay un comando activo
+            if (!activeDirection) {
+                switch(event.key) {
+                    case 'ArrowUp':
+                        startContinuousControl('forward');
+                        break;
+                    case 'ArrowDown':
+                        startContinuousControl('backward');
+                        break;
+                    case 'ArrowLeft':
+                        startContinuousControl('left');
+                        break;
+                    case 'ArrowRight':
+                        startContinuousControl('right');
+                        break;
+                    case ' ':  // Espacio para detener
+                        sendCommand('stop');
+                        break;
+                }
+            }
+        });
+        
+        document.addEventListener('keyup', function(event) {
+            if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(event.key)) {
+                stopContinuousControl();
+            }
+        });
     </script>
 </body>
 </html>
