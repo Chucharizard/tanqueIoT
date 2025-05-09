@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Robot Sensor Dashboard</title>
+    <link rel="stylesheet" href="{{ url_for('static', path='/css/styles.css') }}">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <div class="container">
+        <h1>Robot Sensor Dashboard</h1>
+        
+        <div class="glass-panel">
+            <h2>Estado Actual de Sensores</h2>
+            <div class="sensor-grid">
+                {% for device_id, data in readings.items() %}
+                <!-- Sensor de gas -->
+                <div class="sensor-card">
+                    <div class="sensor-icon">&#128293;</div>
+                    <div class="sensor-label">Nivel de Gas</div>
+                    <div class="sensor-value">{{ data.gas }}</div>
+                    <div class="gauge gauge-gas">
+                        <div class="gauge-fill" style="width: {{ data.gas / 10 }}%"></div>
+                    </div>
+                    {% if data.gas_alert %}
+                    <span class="alert">¡ALERTA DE GAS!</span>
+                    {% endif %}
+                </div>
+                
+                <!-- Sensor de temperatura -->
+                <div class="sensor-card">
+                    <div class="sensor-icon">&#127777;</div>
+                    <div class="sensor-label">Temperatura</div>
+                    <div class="sensor-value">{{ data.temperature }} °C</div>
+                    <div class="gauge gauge-temp">
+                        <div class="gauge-fill" style="width: {{ (data.temperature / 50) * 100 }}%"></div>
+                    </div>
+                </div>
+                
+                <!-- Sensor de humedad -->
+                <div class="sensor-card">
+                    <div class="sensor-icon">&#128167;</div>
+                    <div class="sensor-label">Humedad</div>
+                    <div class="sensor-value">{{ data.humidity }} %</div>
+                    <div class="gauge gauge-humidity">
+                        <div class="gauge-fill" style="width: {{ data.humidity }}%"></div>
+                    </div>
+                </div>
+                
+                <div class="sensor-card wide">
+                    <div class="sensor-label">Última actualización</div>
+                    <div class="sensor-value time">{{ data.timestamp.strftime('%d/%m/%Y %H:%M:%S') }}</div>
+                </div>
+                {% else %}
+                <div class="no-data">
+                    No hay datos disponibles. Esperando conexión del dispositivo...
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        
+        <div class="glass-panel">
+            <h2>Histórico de Sensores (Últimas 24 horas)</h2>
+            <div class="chart-container">
+                <canvas id="sensorChart"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', path='/js/charts.js') }}"></script>
+    <script>
+        // Datos para el gráfico desde Jinja
+        const timestamps = {{ timestamps|tojson }};
+        const gasData = {{ gas_data|tojson }};
+        const tempData = {{ temp_data|tojson }};
+        const humidityData = {{ humidity_data|tojson }};
+        
+        // Inicializar gráfico
+        createChart(timestamps, gasData, tempData, humidityData);
+        
+        // Actualizar la página cada 30 segundos
+        setInterval(() => {
+            window.location.reload();
+        }, 30000);
+    </script>
+</body>
+</html>
