@@ -4,8 +4,211 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Robot Sensor Dashboard</title>
-    <link rel="stylesheet" href="{{ url_for('static', path='/css/styles.css') }}">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Arial, sans-serif;
+        }
+        
+        body {
+            min-height: 100vh;
+            background: linear-gradient(135deg, #1a2a6c, #b21f1f, #fdbb2d);
+            padding: 20px;
+            color: white;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        
+        h1, h2 {
+            text-align: center;
+            margin-bottom: 20px;
+            font-weight: 500;
+            color: rgba(255, 255, 255, 0.9);
+            text-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+        }
+        
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.15);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border-radius: 15px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+            padding: 25px;
+            margin-bottom: 25px;
+        }
+        
+        .sensor-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+        }
+        
+        .sensor-card {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            padding: 20px;
+            text-align: center;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            transition: all 0.3s ease;
+        }
+        
+        .sensor-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);
+        }
+        
+        .sensor-icon {
+            font-size: 40px;
+            margin-bottom: 15px;
+        }
+        
+        .sensor-value {
+            font-size: 28px;
+            font-weight: 600;
+            margin: 10px 0;
+        }
+        
+        .sensor-label {
+            font-size: 16px;
+            opacity: 0.8;
+        }
+        
+        .wide {
+            grid-column: 1 / -1;
+        }
+        
+        .alert {
+            color: #ff4d4d;
+            font-weight: bold;
+            animation: pulse 1.5s infinite;
+        }
+        
+        @keyframes pulse {
+            0% { opacity: 0.5; }
+            50% { opacity: 1; }
+            100% { opacity: 0.5; }
+        }
+        
+        .gauge {
+            width: 100%;
+            height: 8px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 4px;
+            margin: 15px 0;
+            overflow: hidden;
+        }
+        
+        .gauge-fill {
+            height: 100%;
+            border-radius: 4px;
+            transition: width 0.5s ease-out;
+        }
+        
+        .gauge-gas .gauge-fill {
+            background: linear-gradient(90deg, #43a047, #f57c00, #d32f2f);
+        }
+        
+        .gauge-temp .gauge-fill {
+            background: linear-gradient(90deg, #2196f3, #ff9800, #f44336);
+        }
+        
+        .gauge-humidity .gauge-fill {
+            background: linear-gradient(90deg, #f44336, #2196f3, #43a047);
+        }
+        
+        .chart-container {
+            width: 100%;
+            height: 400px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 10px;
+            padding: 20px;
+        }
+        
+        .control-panel {
+            margin-top: 20px;
+        }
+        
+        .controls-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            grid-template-rows: repeat(3, 1fr);
+            gap: 15px;
+            max-width: 400px;
+            margin: 0 auto;
+        }
+        
+        .control-btn {
+            width: 100%;
+            height: 80px;
+            font-size: 18px;
+            border: none;
+            border-radius: 10px;
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(5px);
+            color: white;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .control-btn:hover {
+            background: rgba(255, 255, 255, 0.25);
+            transform: translateY(-2px);
+        }
+        
+        .control-btn:active {
+            transform: translateY(1px);
+        }
+        
+        #forward-btn {
+            grid-column: 2;
+            grid-row: 1;
+        }
+        
+        #backward-btn {
+            grid-column: 2;
+            grid-row: 3;
+        }
+        
+        #left-btn {
+            grid-column: 1;
+            grid-row: 2;
+        }
+        
+        #right-btn {
+            grid-column: 3;
+            grid-row: 2;
+        }
+        
+        #stop-btn {
+            grid-column: 2;
+            grid-row: 2;
+            background: rgba(220, 53, 69, 0.3);
+        }
+        
+        #stop-btn:hover {
+            background: rgba(220, 53, 69, 0.5);
+        }
+        
+        .time {
+            font-size: 20px;
+        }
+        
+        .no-data {
+            grid-column: 1 / -1;
+            text-align: center;
+            padding: 50px;
+            font-size: 18px;
+            opacity: 0.7;
+        }
+    </style>
 </head>
 <body>
     <div class="container">
@@ -17,7 +220,7 @@
                 {% for device_id, data in readings.items() %}
                 <!-- Sensor de gas -->
                 <div class="sensor-card">
-                    <div class="sensor-icon">&#128293;</div>
+                    <div class="sensor-icon">🔥</div>
                     <div class="sensor-label">Nivel de Gas</div>
                     <div class="sensor-value">{{ data.gas }}</div>
                     <div class="gauge gauge-gas">
@@ -30,7 +233,7 @@
                 
                 <!-- Sensor de temperatura -->
                 <div class="sensor-card">
-                    <div class="sensor-icon">&#127777;</div>
+                    <div class="sensor-icon">🌡️</div>
                     <div class="sensor-label">Temperatura</div>
                     <div class="sensor-value">{{ data.temperature }} °C</div>
                     <div class="gauge gauge-temp">
@@ -40,7 +243,7 @@
                 
                 <!-- Sensor de humedad -->
                 <div class="sensor-card">
-                    <div class="sensor-icon">&#128167;</div>
+                    <div class="sensor-icon">💧</div>
                     <div class="sensor-label">Humedad</div>
                     <div class="sensor-value">{{ data.humidity }} %</div>
                     <div class="gauge gauge-humidity">
@@ -48,6 +251,7 @@
                     </div>
                 </div>
                 
+                <!-- Última actualización -->
                 <div class="sensor-card wide">
                     <div class="sensor-label">Última actualización</div>
                     <div class="sensor-value time">{{ data.timestamp.strftime('%d/%m/%Y %H:%M:%S') }}</div>
@@ -60,6 +264,19 @@
             </div>
         </div>
         
+        <!-- Panel de control -->
+        <div class="glass-panel">
+            <h2>Control del Tanque</h2>
+            <div class="controls-grid">
+                <button id="forward-btn" class="control-btn">⬆️ Adelante</button>
+                <button id="left-btn" class="control-btn">⬅️ Izquierda</button>
+                <button id="stop-btn" class="control-btn">⏹️ Detener</button>
+                <button id="right-btn" class="control-btn">➡️ Derecha</button>
+                <button id="backward-btn" class="control-btn">⬇️ Atrás</button>
+            </div>
+        </div>
+        
+        <!-- Histórico de sensores -->
         <div class="glass-panel">
             <h2>Histórico de Sensores (Últimas 24 horas)</h2>
             <div class="chart-container">
@@ -67,8 +284,7 @@
             </div>
         </div>
     </div>
-
-    <script src="{{ url_for('static', path='/js/charts.js') }}"></script>
+    
     <script>
         // Datos para el gráfico desde Jinja
         const timestamps = {{ timestamps|tojson }};
@@ -76,13 +292,166 @@
         const tempData = {{ temp_data|tojson }};
         const humidityData = {{ humidity_data|tojson }};
         
-        // Inicializar gráfico
-        createChart(timestamps, gasData, tempData, humidityData);
+        // Función para enviar comandos al tanque
+        function sendCommand(action) {
+            fetch('/api/command', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ action: action }),
+            })
+            .then(response => response.json())
+            .then(data => console.log('Comando enviado:', data))
+            .catch(error => console.error('Error al enviar comando:', error));
+        }
+        
+        // Configurar eventos para botones de control
+        document.getElementById('forward-btn').addEventListener('click', () => sendCommand('forward'));
+        document.getElementById('left-btn').addEventListener('click', () => sendCommand('left'));
+        document.getElementById('stop-btn').addEventListener('click', () => sendCommand('stop'));
+        document.getElementById('right-btn').addEventListener('click', () => sendCommand('right'));
+        document.getElementById('backward-btn').addEventListener('click', () => sendCommand('backward'));
+        
+        // Detener auto al soltar botones (opcional)
+        document.querySelectorAll('.control-btn').forEach(btn => {
+            if (btn.id !== 'stop-btn') {
+                btn.addEventListener('mouseup', () => sendCommand('stop'));
+                btn.addEventListener('touchend', () => sendCommand('stop'));
+            }
+        });
         
         // Actualizar la página cada 30 segundos
         setInterval(() => {
             window.location.reload();
         }, 30000);
+        
+        // Crear gráfico de sensores
+        function createChart() {
+            if (timestamps.length === 0) return;
+            
+            const ctx = document.getElementById('sensorChart').getContext('2d');
+            
+            // Convertir timestamps a formato legible
+            const labels = timestamps.map(timestamp => {
+                const date = new Date(timestamp);
+                return date.toLocaleTimeString();
+            });
+            
+            const chart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        {
+                            label: 'Nivel de Gas',
+                            data: gasData,
+                            borderColor: '#f57c00',
+                            backgroundColor: 'rgba(245, 124, 0, 0.1)',
+                            tension: 0.4,
+                            yAxisID: 'y-gas',
+                        },
+                        {
+                            label: 'Temperatura (°C)',
+                            data: tempData,
+                            borderColor: '#f44336',
+                            backgroundColor: 'rgba(244, 67, 54, 0.1)',
+                            tension: 0.4,
+                            yAxisID: 'y-temp',
+                        },
+                        {
+                            label: 'Humedad (%)',
+                            data: humidityData,
+                            borderColor: '#2196f3',
+                            backgroundColor: 'rgba(33, 150, 243, 0.1)',
+                            tension: 0.4,
+                            yAxisID: 'y-humidity',
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: {
+                        mode: 'index',
+                        intersect: false,
+                    },
+                    plugins: {
+                        title: {
+                            display: true,
+                            text: 'Histórico de Sensores',
+                            color: 'white',
+                            font: {
+                                size: 16
+                            }
+                        },
+                        legend: {
+                            labels: {
+                                color: 'white'
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            ticks: {
+                                color: 'rgba(255, 255, 255, 0.7)'
+                            },
+                            grid: {
+                                color: 'rgba(255, 255, 255, 0.1)'
+                            }
+                        },
+                        'y-gas': {
+                            type: 'linear',
+                            position: 'left',
+                            title: {
+                                display: true,
+                                text: 'Nivel de Gas',
+                                color: '#f57c00'
+                            },
+                            ticks: {
+                                color: 'rgba(255, 255, 255, 0.7)'
+                            },
+                            grid: {
+                                color: 'rgba(255, 255, 255, 0.1)'
+                            }
+                        },
+                        'y-temp': {
+                            type: 'linear',
+                            position: 'right',
+                            title: {
+                                display: true,
+                                text: 'Temperatura (°C)',
+                                color: '#f44336'
+                            },
+                            ticks: {
+                                color: 'rgba(255, 255, 255, 0.7)'
+                            },
+                            grid: {
+                                display: false
+                            }
+                        },
+                        'y-humidity': {
+                            type: 'linear',
+                            position: 'right',
+                            title: {
+                                display: true,
+                                text: 'Humedad (%)',
+                                color: '#2196f3'
+                            },
+                            ticks: {
+                                color: 'rgba(255, 255, 255, 0.7)'
+                            },
+                            grid: {
+                                display: false
+                            }
+                        }
+                    }
+                }
+            });
+        }
+        
+        // Crear gráfico al cargar la página
+        createChart();
     </script>
 </body>
 </html>
